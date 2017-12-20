@@ -1,0 +1,41 @@
+{
+  "name": "discord-stats",
+  "version": "0.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "bcrypt-nodejs": "0.0.3",
+    "body-parser": "^1.17.2",
+    "client-oauth2": "^4.1.0",
+    "connect-session-sequelize": "^4.1.0",
+    "cookie-parser": "^1.4.3",
+    "discord.io": "github:woor/discord.io#gateway_v6",
+    "ejs": "^2.5.6",
+    "express": "^4.15.3",
+    "express-session": "^1.15.3",
+    "moment": "^2.18.1",
+    "passport": "^0.3.2",
+    "passport-local": "^1.0.0",
+    "pg": "^6.4.0",
+    "pg-hstore": "^2.3.2",
+    "request": "^2.83.0",
+    "sequelize": "^4.2.1",
+    "serve-favicon": "^2.4.3",
+    "socket.io": "^2.0.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "\"# DiscordStats\"",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rothaga/DiscordStats.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/Rothaga/DiscordStats/issues"
+  },
+  "homepage": "https://github.com/Rothaga/DiscordStats#readme"
+}
