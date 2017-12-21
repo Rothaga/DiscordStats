@@ -1,13 +1,17 @@
 const https = require('https');
+var youtubeStream = require('./stream');
+var settings = require('./settings')
 var request = require('request');
-var express = require('express'),
+var express = require('express');
+var fs = require('fs');
     app = express();
 var Discord = require('discord.io');
     var bot = new Discord.Client({
-    	token: "MzkwOTg1ODY1MDAzOTI1NTA1.DRtIbA.FbuGsAMqcLlyFqDPAGi08czjl9g",
+    	token: settings.token,
     	autorun: true
     });
-
+    var voiceChannelID = null;
+    var yt_url = '';
     bot.on('ready', function(event) {
         console.log('Logged in as %s - %s\n', bot.username, bot.id);
         bot.setPresence({
@@ -20,25 +24,17 @@ var Discord = require('discord.io');
 
     bot.on('message', function(user, userID, channelID, message, event) {
         var botMention = "<@" + bot.id + ">";
-
         if(userID != bot.id && message.includes(botMention)){
-          console.log('user',user);
-          console.log('m',message);
           if(message.includes("siege")){
             var siege_username = "";
-            var platform = 'uplay';
-            var result = undefined;
+            siege_username = getSiegeUsername(message);
             bot.simulateTyping(channelID);
-            var index = message.indexOf('siege') + 5;
-            var temp = message.substring(index);
-            siege_username = temp.trim();
-
             //Operators
             if(message.includes('-o')){
               siege_username = siege_username.substring(0,siege_username.indexOf('-o'));
               var operator = message.substring(message.indexOf('-o') + 2);
               operator = operator.trim();
-              var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=' + platform
+              var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
               var msg = "";
               request(url, function (error, response, body) {
                 if (!error && response.statusCode == 200) {
@@ -62,10 +58,9 @@ var Discord = require('discord.io');
                   })
                 }
               });
-
             }
             else{ //Player Data
-              var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=' + platform
+              var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=uplay'
               request(url, function (error, response, body) {
                 if (!error && response.statusCode == 200) {
                   result = JSON.parse(body);
@@ -93,7 +88,35 @@ var Discord = require('discord.io');
               });
 
             }
+          }
+          else if(message.includes("play")){
+            //Stop current track
+            try{
+              bot.leaveVoiceChannel(voiceChannelID,function(error){
+                //cantstopwontstop
+              });
+            }catch(err){
 
+            }
+            yt_url = message.substring(message.indexOf('play') + 4).trim();
+            console.log('url',yt_url);
+            for(var i in bot.channels){
+              var channel = bot.channels[i];
+              console.log(channel);
+              for(var u in channel.members){
+                if(channel.members[u].user_id == userID){
+                  voiceChannelID = channel.members[u].channel_id;
+                  break;
+                }
+              }
+            }
+            playVideo(voiceChannelID,yt_url);
+
+          }
+          else if(message.includes("stop")){
+
+            bot.leaveVoiceChannel(voiceChannelID);
+            voiceChannelID = null;
 
           }
         }
@@ -110,8 +133,57 @@ var Discord = require('discord.io');
       // some other closing procedures go here
       process.exit( );
     })
+    process.on('uncaughtException', function(err){
+      //We cant stop we wont stop
+      console.error('uncaughtException: ' + err.message);
+      console.error(err.stack);
+      if(voiceChannelID != null){
+        console.log('restart prompt');
+        console.log('url',yt_url);
+        playVideo(voiceChannelID,yt_url);
+      }
+      //process.exit(1);             // exit with error
+    });
+function getSiegeUsername(message){
+  var siege_username = "";
+  var index = message.indexOf('siege') + 5;
+  var temp = message.substring(index);
+  siege_username = temp.trim();
+  return siege_username;
+}
+function playVideo(vci, u) {
+  bot.joinVoiceChannel(vci, function(error){
+        if(vci == null){
+          bot.sendMessage({
+            to: channelID,
+            message: "Error: User is not in a voice channel"
+          })
+        }
+        bot.getAudioContext(vci, function(error, stream) {
+        //Once again, check to see if any errors exist
+        if (error) {console.log(error); bot.leaveVoiceChannel(vci); return;}
+
+        try{
+          youtubeStream(u).pipe(stream, {end: false});
+        }catch(err){
+          console.log(err);
+        }
 
 
+        //The stream fires `done` when it's got nothing else to send to Discord.
+        stream.on('done', function() {
+          console.log('done');
+          bot.leaveVoiceChannel(vci,function(error){
+            console.log('error',error);
+          });
+        });
+        stream.on('error', function() {
+          console.log('asdasd');
+        });
+      });
+
+  });
+}
 var server = require('http').createServer(app);
 server.listen(9000);
 
