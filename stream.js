@@ -11,6 +11,7 @@ function streamify (uri, opt) {
     videoFormat: 'mp4',
     quality: 'highest',
     audioFormat: 'oga',
+    volume: 0.25,
     applyOptions: function () {}
   }, opt)
 
@@ -27,7 +28,7 @@ function streamify (uri, opt) {
     ? fs.createWriteStream(opt.file)
     : through()
 
-  var ffmpeg = new FFmpeg(video)
+  var ffmpeg = new FFmpeg(video).audioFilters('volume=' + opt.volume)
   opt.applyOptions(ffmpeg)
   var output = ffmpeg
     .format(opt.audioFormat)
