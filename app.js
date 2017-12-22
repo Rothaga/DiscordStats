@@ -6,12 +6,27 @@ var express = require('express');
 var fs = require('fs');
     app = express();
 var Discord = require('discord.io');
+function Queue()
+{
+ this.stac=new Array();
+ this.pop=function(){
+  return this.stac.pop();
+ }
+ this.push=function(item){
+  this.stac.unshift(item);
+ }
+ this.length = function(){
+   return this.stac.length;
+ }
+}
+  var playlist = new Queue();
     var bot = new Discord.Client({
     	token: settings.token,
     	autorun: true
     });
     var voiceChannelID = null;
     var yt_url = '';
+    var isPlaying = false;
     const DEFAULT_AUDIO_VOLUME = 0.25;
     var audioVolume = DEFAULT_AUDIO_VOLUME;
     bot.on('ready', function(event) {
@@ -25,11 +40,9 @@ var Discord = require('discord.io');
     });
 
     bot.on('message', function(user, userID, channelID, message, event) {
-      console.log(event.d);
-      console.log(bot.id);
+
         for(var m in event.d.mentions){
           if(event.d.mentions[m].id == bot.id){
-            console.log('deleted');
             bot.deleteMessage({
               channelID: channelID,
               messageID: event.d.id
@@ -103,19 +116,11 @@ var Discord = require('discord.io');
             }
           }
           else if(message.includes("play")){
-            //Stop current track
-            try{
-              bot.leaveVoiceChannel(voiceChannelID,function(error){
-                //cantstopwontstop
-              });
-            }catch(err){
 
-            }
             yt_url = message.substring(message.indexOf('play') + 4).trim();
 
             for(var i in bot.channels){
               var channel = bot.channels[i];
-              console.log(channel);
               for(var u in channel.members){
                 if(channel.members[u].user_id == userID){
                   voiceChannelID = channel.members[u].channel_id;
@@ -139,14 +144,31 @@ var Discord = require('discord.io');
             } else{
               audioVolume = DEFAULT_AUDIO_VOLUME;
             }
-            playVideo(voiceChannelID,yt_url,audioVolume);
+            playlist.push({url: yt_url, volume: audioVolume});
+            if(isPlaying){
+              bot.sendMessage({
+                to: channelID,
+                message: "Added song to playlist"
+              })
+            }
+            if(!isPlaying){
+              setTimeout(function(){
+                playNext();
+              }, 3000);
+            }
+            console.log('size',playlist.length());
+
 
           }
-          else if(message.includes("stop")){
-
+          else if(message.includes("skip")){
             bot.leaveVoiceChannel(voiceChannelID);
-            voiceChannelID = null;
-
+            bot.joinVoiceChannel(voiceChannelID, function(error){});
+            //playNext(); //trigger the scoket error
+          }
+          else if(message.includes("stop")){
+              bot.leaveVoiceChannel(voiceChannelID);
+              voiceChannelID = null;
+              playlist = [];
           }
         }
     });
@@ -169,9 +191,6 @@ var Discord = require('discord.io');
       if(voiceChannelID != null){
         bot.connect();
         console.log('restart prompt');
-        console.log('url',yt_url);
-        console.log('av',audioVolume);
-        setTimeout(function(){playVideo(voiceChannelID,yt_url,audioVolume);}, 3000);
       }
       //process.exit(1);             // exit with error
     });
@@ -183,29 +202,39 @@ function getSiegeUsername(message){
   return siege_username;
 }
 function playVideo(vci, u, aV) {
+  console.log(u);
   bot.joinVoiceChannel(vci, function(error){
+      isPlaying = true;
         bot.getAudioContext(vci, function(error, stream) {
         //Once again, check to see if any errors exist
-        if (error) {console.log(error); bot.leaveVoiceChannel(vci); return;}
+        if (error) {console.log(error); bot.leaveVoiceChannel(vci); isPlaying = false; return;}
 
         try{
           youtubeStream(u, {volume: aV}).pipe(stream, {end: false});
         }catch(err){
           console.log(err);
         }
-        //The stream fires `done` when it's got nothing else to send to Discord.
+        //The stream fires `done` when it's got nothing else to send to Discord even if theres an error.
         stream.on('done', function() {
-          console.log('done');
-          bot.leaveVoiceChannel(vci,function(error){
-            console.log('error',error);
-          });
-        });
-        stream.on('error', function() {
-          console.log('asdasd');
+          console.log('DONE');
+          isPlaying = false;
+          setTimeout(function(){
+            playNext();
+          }, 3000);
         });
       });
 
   });
+}
+function playNext(){
+  if(playlist.length() > 0){
+    var current = playlist.pop();
+    console.log(current);
+    playVideo(voiceChannelID,current.url,current.volume);
+  }else{
+    bot.leaveVoiceChannel(voiceChannelID);
+    voiceChannelID = null;
+  }
 }
 var server = require('http').createServer(app);
 server.listen(9000);
