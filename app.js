@@ -1,5 +1,6 @@
 const https = require('https');
 var youtubeStream = require('./stream');
+var ytdl = require('ytdl-core')
 const settings = require('./settings')
 var request = require('request');
 var express = require('express');
@@ -91,7 +92,6 @@ function Queue()
               request(url, function (error, response, body) {
                 if (!error && response.statusCode == 200) {
                   result = JSON.parse(body);
-                  console.log(body);
                   bot.sendMessage({
                       to: channelID,
                       message: "Username: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
@@ -144,20 +144,24 @@ function Queue()
             } else{
               audioVolume = DEFAULT_AUDIO_VOLUME;
             }
-            playlist.push({url: yt_url, volume: audioVolume});
-            if(isPlaying){
-              bot.sendMessage({
-                to: channelID,
-                message: "Added song to playlist"
-              })
-            }
-            if(!isPlaying){
-              setTimeout(function(){
-                playNext();
-              }, 3000);
-            }
-            console.log('size',playlist.length());
-
+            var item = {url: yt_url, volume: audioVolume, channel: channelID, title: ''};
+            ytdl.getInfo(yt_url, {quality:"highest"}, function(err,info){
+              if(info != null){
+                item.title = info.title;
+              }
+              playlist.push(item); //Todo: make this a class/function
+              if(isPlaying){
+                bot.sendMessage({
+                  to: channelID,
+                  message: "Added song to playlist"
+                })
+              }
+              if(!isPlaying){
+                setTimeout(function(){
+                  playNext();
+                }, 3000);
+              }
+            })
 
           }
           else if(message.includes("skip")){
@@ -169,6 +173,12 @@ function Queue()
               bot.leaveVoiceChannel(voiceChannelID);
               voiceChannelID = null;
               playlist = [];
+          }
+          else {
+            bot.sendMessage({
+              to: channelID,
+              message: "Commands are: siege UPLAY_USERNAME (-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "Parameters in parantheses are optional- do not type the parantheses."
+            })
           }
         }
     });
@@ -211,12 +221,19 @@ function playVideo(vci, u, aV) {
 
         try{
           youtubeStream(u, {volume: aV}).pipe(stream, {end: false});
+
         }catch(err){
           console.log(err);
         }
         //The stream fires `done` when it's got nothing else to send to Discord even if theres an error.
         stream.on('done', function() {
           console.log('DONE');
+          bot.setPresence({
+              idle_since: null,
+              game: {
+              name: "Allen's Test App"
+              }
+          })
           isPlaying = false;
           setTimeout(function(){
             playNext();
@@ -230,7 +247,27 @@ function playNext(){
   if(playlist.length() > 0){
     var current = playlist.pop();
     console.log(current);
-    playVideo(voiceChannelID,current.url,current.volume);
+    if(voiceChannelID != null){
+
+      playVideo(voiceChannelID,current.url,current.volume);
+      if(current.title != null){
+        bot.sendMessage({
+          to: current.channel,
+          message: "Now Playing: " + current.title
+        })
+        bot.setPresence({
+            idle_since: null,
+            game: {
+            name: current.title
+            }
+        })
+      }
+
+
+    } else {
+      console.log('user not in voice channel');
+    }
+
   }else{
     bot.leaveVoiceChannel(voiceChannelID);
     voiceChannelID = null;

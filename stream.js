@@ -10,12 +10,13 @@ function streamify (uri, opt) {
   opt = xtend({
     videoFormat: 'mp4',
     quality: 'highest',
-    audioFormat: 'oga',
+    audioFormat: 'mp3',
     volume: 0.25,
     applyOptions: function () {}
   }, opt)
 
-  var video = ytdl(uri, {filter: filterVideo, quality: opt.quality})
+  var video = ytdl(uri, {filter: filterVideo, quality: opt.quality});
+
 
   function filterVideo (format) {
     return (
