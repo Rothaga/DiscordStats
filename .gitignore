@@ -1,6 +1,4 @@
-.settings/
+settings.js
+node_modules/
 .classpath
 .project
-target/
-node_modules/
-settings.js
