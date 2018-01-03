@@ -30,7 +30,7 @@ function Queue()
     var yt_url = '';
     var isPlaying = false;
     const DEFAULT_AUDIO_VOLUME = 0.25;
-    var audioVolume = DEFAULT_AUDIO_VOLUME;
+
     bot.on('ready', function(event) {
         console.log('Logged in as %s - %s\n', bot.username, bot.id);
         bot.setPresence({
@@ -59,35 +59,11 @@ function Queue()
           }
           else if(message.includes("play")){
             if(message.includes('https://www.youtube.com/playlist?list=')){
-              getUserVoiceChannelID(userID);
-              var playlist1 = new yt_playlist(settings.youtube);
-              var listId = message.substring(message.indexOf('?list=') + 6)//'PL6gx4Cwl9DGBMdkKFn3HasZnnAqVjzHn_';
-              var volume = DEFAULT_AUDIO_VOLUME;
-              playlist1.parsePlaylist(listId).then(function(res) {
-                  for(var i in res.items){
-                    if(res.items[i].contentDetails != null){
-                      //console.log(res.items[i].contentDetails);
-                      if(res.items[i].contentDetails.videoId != null){
-                        var ub = 'https://www.youtube.com/watch?v=' + res.items[i].contentDetails.videoId;
-                        var item = {url: ub, volume: volume, channel: channelID, title: ''};
-                        playlist.push(item); //Todo: make this a class/function
-                      }
-                    }
-                  }
-                  if(!isPlaying){
-                    setTimeout(function(){
-                      playNext(playlist);
-                    }, 3000);
-                  }
-              }).catch(function(error) {
-                  console.log(error);
-              });
-
+              playYouTubePlaylist(message, userID,channelID);
             }
             else if(message.includes('https://www.youtube.com/watch?v=')){
               playYouTubeURL(message,channelID,userID);
             }
-
           }
           else if(message.includes("skip")){
             bot.leaveVoiceChannel(voiceChannelID);
@@ -289,6 +265,10 @@ function playNext(playlist){
 
     } else {
       console.log('user not in voice channel');
+      bot.sendMessage({
+        to: channelID,
+        message: 'user not in voice channel'
+      })
     }
 
   }else{
@@ -297,6 +277,7 @@ function playNext(playlist){
   }
 }
 function playYouTubeURL(message, channelID, userID){
+  var audioVolume = DEFAULT_AUDIO_VOLUME;
   yt_url = message.substring(message.indexOf('play') + 4).trim();
 
   getUserVoiceChannelID(userID);
@@ -335,6 +316,48 @@ function playYouTubeURL(message, channelID, userID){
     }
   })
 
+}
+function playYouTubePlaylist(message, userID,channelID){
+  var volume = DEFAULT_AUDIO_VOLUME;
+  if(message.includes('volume')){
+    try{
+      volume = parseFloat(message.substring(message.indexOf('volume') + 6));
+    }catch(err){
+      volume = DEFAULT_AUDIO_VOLUME;
+      bot.sendMessage({
+        to: channelID,
+        message: "Error: Invalid volume(0 - 1.0)"
+      })
+    }
+  } else{
+    volume = DEFAULT_AUDIO_VOLUME;
+  }
+  getUserVoiceChannelID(userID);
+  var playlist1 = new yt_playlist(settings.youtube);
+  var listId = message.substring(message.indexOf('?list=') + 6)//'PL6gx4Cwl9DGBMdkKFn3HasZnnAqVjzHn_';
+  if(listId.includes('volume')){
+    listId = listId.substring(0,listId.indexOf('volume'));
+  }
+
+  playlist1.parsePlaylist(listId).then(function(res) {
+      for(var i in res.items){
+        if(res.items[i].contentDetails != null){
+          //console.log(res.items[i].contentDetails);
+          if(res.items[i].contentDetails.videoId != null){
+            var ub = 'https://www.youtube.com/watch?v=' + res.items[i].contentDetails.videoId;
+            var item = {url: ub, volume: volume, channel: channelID, title: ''};
+            playlist.push(item); //Todo: make this a class/function
+          }
+        }
+      }
+      if(!isPlaying){
+        setTimeout(function(){
+          playNext(playlist);
+        }, 3000);
+      }
+  }).catch(function(error) {
+      console.log(error);
+  });
 }
 
 var server = require('http').createServer(app);
