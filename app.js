@@ -1,13 +1,16 @@
 const https = require('https');
+
 var youtubeStream = require('./stream');
 var ytdl = require('ytdl-core')
 const settings = require('./settings')
 var request = require('request');
 var express = require('express');
 var fs = require('fs');
-    app = express();
 var Discord = require('discord.io');
 var yt_playlist = require('./ytplaylist');
+var pg = require('./postgres')
+app = express();
+
 function Queue()
 {
  this.stac=new Array();
@@ -32,6 +35,10 @@ function Queue()
     const DEFAULT_AUDIO_VOLUME = 0.25;
 
     bot.on('ready', function(event) {
+
+      pg.init();
+      //client.query("INSERT INTO users(discord_id, uplay_username) values($1, $2) ON CONFLICT(discord_id) DO UPDATE SET uplay_username = $3", ['1', 'WAKE_UP_ULTRA','TEST'])
+      console.log('Backend ready to go.');
         console.log('Logged in as %s - %s\n', bot.username, bot.id);
         bot.setPresence({
             idle_since: null,
@@ -55,9 +62,9 @@ function Queue()
         var botMention = "<@" + bot.id + ">";
         if(userID != bot.id && message.includes(botMention)){
           if(message.includes("siege")){
-            handleSiege(message,channelID)
+            handleSiege(message,channelID,userID);
           }
-          else if(message.includes("play")){
+          else if(message.includes("play") && !message.includes("set uplay")){
             if(message.includes('https://www.youtube.com/playlist?list=')){
               playYouTubePlaylist(message, userID,channelID);
             }
@@ -73,6 +80,15 @@ function Queue()
               bot.leaveVoiceChannel(voiceChannelID);
               voiceChannelID = null;
               playlist = [];
+          }
+          else if(message.includes("set uplay")){
+            var username = message.substring(message.indexOf('set uplay') + 10);
+            pg.setUplayUsername(userID,username);
+            bot.sendMessage({
+              to: channelID,
+              message: "Uplay username set to: " + username
+            })
+            console.log('uname',username);
           }
           else {
             bot.sendMessage({
@@ -116,78 +132,101 @@ function getUserVoiceChannelID(userID){
   }
   return voiceChannelID;
 }
-function getSiegeUsername(message){
+function getSiegeUsername(message,userID,_callback){
   var siege_username = "";
-  var index = message.indexOf('siege') + 5;
-  var temp = message.substring(index);
-  siege_username = temp.trim();
-  return siege_username;
-}
-function handleSiege(message,channelID){
-  var siege_username = "";
-  siege_username = getSiegeUsername(message);
-  bot.simulateTyping(channelID);
-  //Operators
-  if(message.includes('-o')){
-    siege_username = siege_username.substring(0,siege_username.indexOf('-o'));
-    var operator = message.substring(message.indexOf('-o') + 2);
-    operator = operator.trim();
-    var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
-    var msg = "";
-    request(url, function (error, response, body) {
-      if (!error && response.statusCode == 200) {
-        result = JSON.parse(body);
-        for(var obj in result.operator_records){
-          var api_operator = result.operator_records[obj].operator.name.toLowerCase();
-          if(api_operator == 'jäger'){
-            api_operator = 'jaeger';
-          }
-          if(api_operator == operator.toLowerCase()){
-            msg = "Operator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
-            + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Loses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
-            + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n";
-          }
+  if(message.includes('siege -u')){
+    var index = message.indexOf('siege') + 8;
+    var temp = message.substring(index);
+    siege_username = temp.trim();
+    _callback(siege_username);
+  } else {
+    //get uname from postgres
+    pg.getUplayUsername(userID).then(function(result){
+        if(result.rows[0]){
+          _callback(result.rows[0].uplay_username);
         }
-        bot.sendMessage({
-            to: channelID,
-            message: msg
-        });
-      }
-      else{
-        bot.sendMessage({
-          to: channelID,
-          message: "Syntax Error"
-        })
-      }
+        else{
+          _callback("");
+        }
     });
   }
-  else{ //Player Data
-    var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=uplay'
-    request(url, function (error, response, body) {
-      if (!error && response.statusCode == 200) {
-        result = JSON.parse(body);
-        bot.sendMessage({
-            to: channelID,
-            message: "Username: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
-            + "Ranked Stats: \n" + "Wins: " + result.player.stats.ranked.wins + "\n" + "Losses: " + result.player.stats.ranked.losses + "\n"
-            + "Win Rate: " + result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) + "\n"
-            + "Kills: " + result.player.stats.ranked.kills + "\n" + "Deaths: " + result.player.stats.ranked.deaths + "\n" + "K/D: " + result.player.stats.ranked.kd + "\n"
-            + "\n" + "Casual Stats:\n" + "Wins: " + result.player.stats.casual.wins + "\nLosses: " + result.player.stats.casual.losses + "\n" + "Win Rate: " + result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)+
-            "\n" + "Kills: " + result.player.stats.casual.kills + "\n" + "Deaths: " + result.player.stats.casual.deaths + "\n" + "K/D: " + result.player.stats.casual.kd + "\n\n" + "Meme Stats: \n" + "Revives: " + result.player.stats.overall.revives + "\nSuicides: " +
-            result.player.stats.overall.suicides + "\nReinforcements Deployed: " + result.player.stats.overall.reinforcements_deployed + "\nBarricades Built: " + result.player.stats.overall.barricades_built + "\nSteps Moved: " + result.player.stats.overall.steps_moved + "\nHit Percentage: "
-            + (result.player.stats.overall.bullets_hit/result.player.stats.overall.bullets_fired) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
-            + "Assists: " + result.player.stats.overall.assists + "\n"
-            + url + "\n"
-        });
-      }
-      else{
-        bot.sendMessage({
+
+}
+function handleSiege(message,channelID,userID){
+  var siege_username = "";
+  getSiegeUsername(message,userID,function(username){
+    siege_username = username;
+    if(siege_username==""){
+      bot.sendMessage({
           to: channelID,
-          message: "Error:\n" + error
-        })
-      }
-    });
-  }
+          message: "Uplay Username not set for this user. Set username w/ 'set uplay USERNAME' "
+      });
+      return;
+    }
+    bot.simulateTyping(channelID);
+    //Operators
+    if(message.includes('-o')){
+      siege_username = siege_username.substring(0,siege_username.indexOf('-o'));
+      var operator = message.substring(message.indexOf('-o') + 2);
+      operator = operator.trim();
+      var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
+      var msg = "";
+      request(url, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+          result = JSON.parse(body);
+          for(var obj in result.operator_records){
+            var api_operator = result.operator_records[obj].operator.name.toLowerCase();
+            if(api_operator == 'jäger'){
+              api_operator = 'jaeger';
+            }
+            if(api_operator == operator.toLowerCase()){
+              msg = "Operator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
+              + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Loses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
+              + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n";
+            }
+          }
+          bot.sendMessage({
+              to: channelID,
+              message: msg
+          });
+        }
+        else{
+          bot.sendMessage({
+            to: channelID,
+            message: "Syntax Error"
+          })
+        }
+      });
+    }
+    else{ //Player Data
+      var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=uplay'
+      request(url, function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+          result = JSON.parse(body);
+          bot.sendMessage({
+              to: channelID,
+              message: "Username: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
+              + "Ranked Stats: \n" + "Wins: " + result.player.stats.ranked.wins + "\n" + "Losses: " + result.player.stats.ranked.losses + "\n"
+              + "Win Rate: " + result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) + "\n"
+              + "Kills: " + result.player.stats.ranked.kills + "\n" + "Deaths: " + result.player.stats.ranked.deaths + "\n" + "K/D: " + result.player.stats.ranked.kd + "\n"
+              + "\n" + "Casual Stats:\n" + "Wins: " + result.player.stats.casual.wins + "\nLosses: " + result.player.stats.casual.losses + "\n" + "Win Rate: " + result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)+
+              "\n" + "Kills: " + result.player.stats.casual.kills + "\n" + "Deaths: " + result.player.stats.casual.deaths + "\n" + "K/D: " + result.player.stats.casual.kd + "\n\n" + "Meme Stats: \n" + "Revives: " + result.player.stats.overall.revives + "\nSuicides: " +
+              result.player.stats.overall.suicides + "\nReinforcements Deployed: " + result.player.stats.overall.reinforcements_deployed + "\nBarricades Built: " + result.player.stats.overall.barricades_built + "\nSteps Moved: " + result.player.stats.overall.steps_moved + "\nHit Percentage: "
+              + (result.player.stats.overall.bullets_hit/result.player.stats.overall.bullets_fired) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
+              + "Assists: " + result.player.stats.overall.assists + "\n"
+              + url + "\n"
+          });
+        }
+        else{
+          bot.sendMessage({
+            to: channelID,
+            message: "Error:\n" + error
+          })
+        }
+      });
+    }
+  });
+
 }
 function playVideo(vci, u, aV) {
   console.log(u);
