@@ -83,6 +83,7 @@ function Queue()
           }
           else if(message.includes("set uplay")){
             var username = message.substring(message.indexOf('set uplay') + 10);
+            username = username.trim();
             pg.setUplayUsername(userID,username);
             bot.sendMessage({
               to: channelID,
@@ -93,7 +94,7 @@ function Queue()
           else {
             bot.sendMessage({
               to: channelID,
-              message: "Commands are: siege UPLAY_USERNAME (-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "Parameters in parantheses are optional- do not type the parantheses."
+              message: "Commands are: siege (-u UPLAY_USERNAME)(-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "set uplay UPLAY_USERNAME\n""Parameters in parantheses are optional- do not type the parantheses."
             })
           }
         }
@@ -107,6 +108,7 @@ function Queue()
     process.on( 'SIGINT', function() {
       console.log( "\nGracefully shutting down from SIGINT (Ctrl-C)" );
       bot.disconnect();
+      pg.end();
       // some other closing procedures go here
       process.exit( );
     })
@@ -135,10 +137,18 @@ function getUserVoiceChannelID(userID){
 function getSiegeUsername(message,userID,_callback){
   var siege_username = "";
   if(message.includes('siege -u')){
-    var index = message.indexOf('siege') + 8;
-    var temp = message.substring(index);
-    siege_username = temp.trim();
-    _callback(siege_username);
+    if(message.includes('-o')){
+      var temp = message.substring(message.indexOf('siege') + 8,message.indexOf('-o'));
+      siege_username = temp.trim();
+      _callback(siege_username);
+    }
+    else{
+      var index = message.indexOf('siege') + 8;
+      var temp = message.substring(index);
+      siege_username = temp.trim();
+      _callback(siege_username);
+    }
+
   } else {
     //get uname from postgres
     pg.getUplayUsername(userID).then(function(result){
@@ -166,7 +176,7 @@ function handleSiege(message,channelID,userID){
     bot.simulateTyping(channelID);
     //Operators
     if(message.includes('-o')){
-      siege_username = siege_username.substring(0,siege_username.indexOf('-o'));
+      var delta = "";
       var operator = message.substring(message.indexOf('-o') + 2);
       operator = operator.trim();
       var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
@@ -180,15 +190,34 @@ function handleSiege(message,channelID,userID){
               api_operator = 'jaeger';
             }
             if(api_operator == operator.toLowerCase()){
-              msg = "Operator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
-              + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Loses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
+              msg = "User: " + siege_username + "\nOperator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
+              + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Losses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
               + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n";
+              pg.getSiegeOperatorStats(siege_username,api_operator).then(function(pgresult){
+                if(pgresult.rows[0]){
+                  delta = "Δ from " +pgresult.rows[0].last_updated + "\nΔ Rounds Played: " + (result.operator_records[obj].stats.played - pgresult.rows[0].rounds_played) + "\nΔ Wins: " + (result.operator_records[obj].stats.wins- pgresult.rows[0].wins) +
+                  "\nΔ Losses: " + (result.operator_records[obj].stats.losses- pgresult.rows[0].losses) + "\nΔ Win %: " + ((result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)) - pgresult.rows[0].win_percent) +
+                  "\nΔ Kills: " + (result.operator_records[obj].stats.kills - pgresult.rows[0].kills) + "\nΔ Deaths: " + (result.operator_records[obj].stats.deaths - pgresult.rows[0].deaths);
+
+                }
+
+              })
+              pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
+              break;
             }
           }
           bot.sendMessage({
               to: channelID,
               message: msg
+          }, function(err,res){
+            if(delta != ""){
+              bot.sendMessage({
+                to: channelID,
+                message: delta
+              })
+            }
           });
+
         }
         else{
           bot.sendMessage({
@@ -203,6 +232,7 @@ function handleSiege(message,channelID,userID){
       request(url, function (error, response, body) {
         if (!error && response.statusCode == 200) {
           result = JSON.parse(body);
+
           bot.sendMessage({
               to: channelID,
               message: "Username: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
@@ -215,7 +245,25 @@ function handleSiege(message,channelID,userID){
               + (result.player.stats.overall.bullets_hit/result.player.stats.overall.bullets_fired) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
               + "Assists: " + result.player.stats.overall.assists + "\n"
               + url + "\n"
+          },function(err,resp){
+            pg.getSiegeGeneralStats(siege_username).then(function(pgresult){
+              if(pgresult.rows[0]){
+                var delta = "Δ from " +pgresult.rows[0].last_updated  + "\n\nΔ Ranked Wins: " + (result.player.stats.ranked.wins - pgresult.rows[0].ranked_wins) + "\nΔ Ranked Losses: " + (result.player.stats.ranked.losses - pgresult.rows[0].ranked_losses) + "\nΔ Ranked Winrate: " + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) -  pgresult.rows[0].ranked_wr) +
+                "\nΔ Ranked Kills: " + (result.player.stats.ranked.kills - pgresult.rows[0].ranked_kills) + "\nΔ Ranked Deaths: " + (result.player.stats.ranked.deaths - pgresult.rows[0].ranked_deaths) +
+                "\nΔ Ranked K/D: " + (result.player.stats.ranked.kd - pgresult.rows[0].ranked_kd) + "\n\nΔ Casual Wins: " + (result.player.stats.casual.wins - pgresult.rows[0].casual_wins) +"\nΔ Casual Losses: " + (result.player.stats.casual.losses - pgresult.rows[0].casual_losses) + "\nΔ Casual Winrate: " + (result.player.stats.casual.wins / (result.player.stats.casual.wins + result.player.stats.casual.losses) -  pgresult.rows[0].casual_wr) +
+                "\nΔ Casual Kills: " + (result.player.stats.casual.kills - pgresult.rows[0].casual_kills) + "\nΔ Casual Deaths: " + (result.player.stats.casual.deaths - pgresult.rows[0].casual_deaths) +
+                "\nΔ Casual K/D: " + (result.player.stats.casual.kd - pgresult.rows[0].casual_kd);
+                console.log(delta);
+                bot.sendMessage({
+                  to: channelID,
+                  message: delta
+                })
+              }
+            });
+
           });
+
+          pg.saveSiegeGeneralStats(siege_username,new Date(),result.player.stats.ranked.wins,result.player.stats.ranked.losses, "" + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses)),result.player.stats.ranked.kills,result.player.stats.ranked.deaths,result.player.stats.ranked.kd, result.player.stats.casual.wins, result.player.stats.casual.losses, "" + (result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)),result.player.stats.casual.kills,result.player.stats.casual.deaths, result.player.stats.casual.kd);
         }
         else{
           bot.sendMessage({
