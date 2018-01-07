@@ -94,7 +94,7 @@ function Queue()
           else {
             bot.sendMessage({
               to: channelID,
-              message: "Commands are: siege (-u UPLAY_USERNAME)(-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "set uplay UPLAY_USERNAME\n""Parameters in parantheses are optional- do not type the parantheses."
+              message: "Commands are: siege (-u UPLAY_USERNAME)(-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "set uplay UPLAY_USERNAME\n" + "Parameters in parantheses are optional- do not type the parantheses."
             })
           }
         }
