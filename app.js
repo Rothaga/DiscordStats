@@ -103,11 +103,7 @@ function Queue()
     bot.on("disconnect", function() {
       console.log("Bot disconnected");
       pg.end();
-
-      setTimeout(function(){
-        pg.init();
-        bot.connect()//Auto reconnect
-      },3000);
+      process.exit();
 
     });
 
@@ -126,8 +122,8 @@ function Queue()
         bot.connect();
         console.log('restart prompt');
       }
-      bot.disconnect();
-      //process.exit(1);             // exit with error
+      //bot.disconnect();
+      process.exit(1);             // exit with error
     });
 function getUserVoiceChannelID(userID){
   for(var i in bot.channels){
