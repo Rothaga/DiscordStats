@@ -50,14 +50,14 @@ function Queue()
 
     bot.on('message', function(user, userID, channelID, message, event) {
 
-        for(var m in event.d.mentions){
+        /*for(var m in event.d.mentions){
           if(event.d.mentions[m].id == bot.id){
             bot.deleteMessage({
               channelID: channelID,
               messageID: event.d.id
             },function(error){console.log(error);});
           }
-        }
+        }*/
 
         var botMention = "<@" + bot.id + ">";
         if(userID != bot.id && message.includes(botMention)){
@@ -143,23 +143,23 @@ function getSiegeUsername(message,userID,_callback){
     if(message.includes('-o')){
       var temp = message.substring(message.indexOf('siege') + 8,message.indexOf('-o'));
       siege_username = temp.trim();
-      _callback(siege_username);
+      _callback(siege_username,false);
     }
     else{
       var index = message.indexOf('siege') + 8;
       var temp = message.substring(index);
       siege_username = temp.trim();
-      _callback(siege_username);
+      _callback(siege_username, false);
     }
 
   } else {
     //get uname from postgres
     pg.getUplayUsername(userID).then(function(result){
         if(result.rows[0]){
-          _callback(result.rows[0].uplay_username);
+          _callback(result.rows[0].uplay_username, true);
         }
         else{
-          _callback("");
+          _callback("", true);
         }
     });
   }
@@ -167,12 +167,12 @@ function getSiegeUsername(message,userID,_callback){
 }
 function handleSiege(message,channelID,userID){
   var siege_username = "";
-  getSiegeUsername(message,userID,function(username){
+  getSiegeUsername(message,userID,function(username, saveStats){
     siege_username = username;
     if(siege_username==""){
       bot.sendMessage({
           to: channelID,
-          message: "Uplay Username not set for this user. Set username w/ 'set uplay USERNAME' "
+          message: "Uplay Username not set for this user. Set username w/ '@Rothaga's Test Bot set uplay YOUR_USERNAME' "
       });
       return;
     }
@@ -193,9 +193,16 @@ function handleSiege(message,channelID,userID){
               api_operator = 'jaeger';
             }
             if(api_operator == operator.toLowerCase()){
+              var specials = "";
+              for(var i in result.operator_records[obj].stats.specials){
+                specials += (i + ":");
+                specials += result.operator_records[obj].stats.specials[i];
+                specials += "\n";
+              }
+            //  console.log(specials);
               msg = "User: " + siege_username + "\nOperator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
               + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Losses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
-              + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n";
+              + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n\n" + "Specials:\n" + specials + "\n";
               pg.getSiegeOperatorStats(siege_username,api_operator).then(function(pgresult){
                 if(pgresult.rows[0]){
                   delta = "Δ from " +pgresult.rows[0].last_updated + "\nΔ Rounds Played: " + (result.operator_records[obj].stats.played - pgresult.rows[0].rounds_played) + "\nΔ Wins: " + (result.operator_records[obj].stats.wins- pgresult.rows[0].wins) +
@@ -205,7 +212,11 @@ function handleSiege(message,channelID,userID){
                 }
 
               })
-              pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
+              if(saveStats){
+                console.log("Saving stats");
+                pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
+              }
+
               break;
             }
           }
@@ -245,7 +256,7 @@ function handleSiege(message,channelID,userID){
               + "\n" + "Casual Stats:\n" + "Wins: " + result.player.stats.casual.wins + "\nLosses: " + result.player.stats.casual.losses + "\n" + "Win Rate: " + result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)+
               "\n" + "Kills: " + result.player.stats.casual.kills + "\n" + "Deaths: " + result.player.stats.casual.deaths + "\n" + "K/D: " + result.player.stats.casual.kd + "\n\n" + "Meme Stats: \n" + "Revives: " + result.player.stats.overall.revives + "\nSuicides: " +
               result.player.stats.overall.suicides + "\nReinforcements Deployed: " + result.player.stats.overall.reinforcements_deployed + "\nBarricades Built: " + result.player.stats.overall.barricades_built + "\nSteps Moved: " + result.player.stats.overall.steps_moved + "\nHit Percentage: "
-              + (result.player.stats.overall.bullets_hit/result.player.stats.overall.bullets_fired) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
+              + (result.player.stats.overall.bullets_hit/(result.player.stats.overall.bullets_fired + result.player.stats.overall.bullets_hit)) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
               + "Assists: " + result.player.stats.overall.assists + "\n"
               + url + "\n"
           },function(err,resp){
