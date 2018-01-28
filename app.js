@@ -34,6 +34,7 @@ function Queue()
     var isPlaying = false;
     const DEFAULT_AUDIO_VOLUME = 0.25;
     var seasonal_emoji = "🗼";
+    var general_emoji = "🇬";
     var ranks = ['Copper IV','Copper III','Copper II','Copper I','Bronze IV','Bronze III','Bronze II','Bronze I','Silver IV','Silver III','Silver II','Silver I','Gold IV','Gold III','Gold II','Gold I','Plat IV','Plat III','Plat II','Plat I','Diamond']
 
     bot.on('ready', function(event) {
@@ -55,7 +56,14 @@ function Queue()
         console.log('event',event);
         var cid = event.d.channel_id;
         var mid = event.d.message_id;
-        onSeasonalEmojiReact(cid,mid);
+        if(event.d.emoji.name == seasonal_emoji){
+          onSeasonalEmojiReact(cid,mid);
+        }
+        else if(event.d.emoji.name == general_emoji){
+          console.log('general');
+          onGeneralEmojiReact(cid, mid);
+        }
+
       }
 
     })
@@ -63,15 +71,9 @@ function Queue()
     bot.on('message', function(user, userID, channelID, message, event) {
       //console.log(event);
       //Add a react to general stats
-      if(event.d.author.id == bot.id && event.d.content.includes('General Stats')){
+      if(event.d.author.id == bot.id && event.d.content.includes('Username: ')){
         //console.log('react',event.d.id);
-        bot.addReaction({
-          channelID: event.d.channel_id,
-          messageID: event.d.id,
-          reaction: seasonal_emoji
-        },function(err,res){
-        //  console.log(err);
-        });
+        addAllReactions(event.d.channel_id,event.d.id);
       }
         /*for(var m in event.d.mentions){
           if(event.d.mentions[m].id == bot.id){
@@ -214,110 +216,20 @@ function handleSiege(message,channelID,userID){
       var delta = "";
       var operator = message.substring(message.indexOf('-o') + 2);
       operator = operator.trim();
-      var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
-      var msg = "";
-      request(url, function (error, response, body) {
-        if (!error && response.statusCode == 200) {
-          result = JSON.parse(body);
-          for(var obj in result.operator_records){
-            var api_operator = result.operator_records[obj].operator.name.toLowerCase();
-            if(api_operator == 'jäger'){
-              api_operator = 'jaeger';
-            }
-            if(api_operator == operator.toLowerCase()){
-              var specials = "";
-              for(var i in result.operator_records[obj].stats.specials){
-                specials += (i + ":");
-                specials += result.operator_records[obj].stats.specials[i];
-                specials += "\n";
-              }
-            //  console.log(specials);
-              msg = "Username: " + siege_username + "\nOperator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
-              + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Losses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
-              + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n\n" + "Specials:\n" + specials + "\n";
-              pg.getSiegeOperatorStats(siege_username,api_operator).then(function(pgresult){
-                if(pgresult.rows[0]){
-                  delta = "Δ from " +pgresult.rows[0].last_updated + "\nΔ Rounds Played: " + (result.operator_records[obj].stats.played - pgresult.rows[0].rounds_played) + "\nΔ Wins: " + (result.operator_records[obj].stats.wins- pgresult.rows[0].wins) +
-                  "\nΔ Losses: " + (result.operator_records[obj].stats.losses- pgresult.rows[0].losses) + "\nΔ Win %: " + ((result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)) - pgresult.rows[0].win_percent) +
-                  "\nΔ Kills: " + (result.operator_records[obj].stats.kills - pgresult.rows[0].kills) + "\nΔ Deaths: " + (result.operator_records[obj].stats.deaths - pgresult.rows[0].deaths);
+      printSiegeOperatorStats(operator,siege_username,saveStats,function(msg){
+        bot.sendMessage({
+          to: channelID,
+          message: msg
+        })
+      })
 
-                }
-
-              })
-              if(saveStats){
-                console.log("Saving stats");
-                pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
-              }
-
-              break;
-            }
-          }
-          bot.sendMessage({
-              to: channelID,
-              message: msg
-          }, function(err,res){
-            if(delta != ""){
-              bot.sendMessage({
-                to: channelID,
-                message: delta
-              })
-            }
-          });
-
-        }
-        else{
-          bot.sendMessage({
-            to: channelID,
-            message: "Syntax Error"
-          })
-        }
-      });
     }
     else{ //Player Data
-      var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=uplay'
-      request(url, function (error, response, body) {
-        if (!error && response.statusCode == 200) {
-          result = JSON.parse(body);
-          var delta = "";
-          var playerStats =  "**General Stats**\nUsername: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
-          + "**Ranked Stats**: \n" + "Wins: " + result.player.stats.ranked.wins + "\n" + "Losses: " + result.player.stats.ranked.losses + "\n"
-          + "Win Rate: " + result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) + "\n"
-          + "Kills: " + result.player.stats.ranked.kills + "\n" + "Deaths: " + result.player.stats.ranked.deaths + "\n" + "K/D: " + result.player.stats.ranked.kd + "\n"
-          + "\n" + "**Casual Stats**:\n" + "Wins: " + result.player.stats.casual.wins + "\nLosses: " + result.player.stats.casual.losses + "\n" + "Win Rate: " + result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)+
-          "\n" + "Kills: " + result.player.stats.casual.kills + "\n" + "Deaths: " + result.player.stats.casual.deaths + "\n" + "K/D: " + result.player.stats.casual.kd + "\n\n" + "**Meme Stats**: \n" + "Revives: " + result.player.stats.overall.revives + "\nSuicides: " +
-          result.player.stats.overall.suicides + "\nReinforcements Deployed: " + result.player.stats.overall.reinforcements_deployed + "\nBarricades Built: " + result.player.stats.overall.barricades_built + "\nSteps Moved: " + result.player.stats.overall.steps_moved + "\nHit Percentage: "
-          + (result.player.stats.overall.bullets_hit/(result.player.stats.overall.bullets_fired + result.player.stats.overall.bullets_hit)) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
-          + "Assists: " + result.player.stats.overall.assists + "\n"
-          + url + "\n";
-
-          pg.getSiegeGeneralStats(siege_username).then(function(pgresult){
-            if(pgresult.rows[0]){
-              delta = "Δ from " +pgresult.rows[0].last_updated  + "\n\nΔ Ranked Wins: " + (result.player.stats.ranked.wins - pgresult.rows[0].ranked_wins) + "\nΔ Ranked Losses: " + (result.player.stats.ranked.losses - pgresult.rows[0].ranked_losses) + "\nΔ Ranked Winrate: " + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) -  pgresult.rows[0].ranked_wr) +
-              "\nΔ Ranked Kills: " + (result.player.stats.ranked.kills - pgresult.rows[0].ranked_kills) + "\nΔ Ranked Deaths: " + (result.player.stats.ranked.deaths - pgresult.rows[0].ranked_deaths) +
-              "\nΔ Ranked K/D: " + (result.player.stats.ranked.kd - pgresult.rows[0].ranked_kd) + "\n\nΔ Casual Wins: " + (result.player.stats.casual.wins - pgresult.rows[0].casual_wins) +"\nΔ Casual Losses: " + (result.player.stats.casual.losses - pgresult.rows[0].casual_losses) + "\nΔ Casual Winrate: " + (result.player.stats.casual.wins / (result.player.stats.casual.wins + result.player.stats.casual.losses) -  pgresult.rows[0].casual_wr) +
-              "\nΔ Casual Kills: " + (result.player.stats.casual.kills - pgresult.rows[0].casual_kills) + "\nΔ Casual Deaths: " + (result.player.stats.casual.deaths - pgresult.rows[0].casual_deaths) +
-              "\nΔ Casual K/D: " + (result.player.stats.casual.kd - pgresult.rows[0].casual_kd);
-              console.log(delta);
-            }
-            bot.sendMessage({
-              to: channelID,
-              message: playerStats + delta
-            })
-          });
-
-
-          if(saveStats){
-            console.log('Saving general stats');
-            pg.saveSiegeGeneralStats(siege_username,new Date(),result.player.stats.ranked.wins,result.player.stats.ranked.losses, "" + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses)),result.player.stats.ranked.kills,result.player.stats.ranked.deaths,result.player.stats.ranked.kd, result.player.stats.casual.wins, result.player.stats.casual.losses, "" + (result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)),result.player.stats.casual.kills,result.player.stats.casual.deaths, result.player.stats.casual.kd);
-          }
-
-        }
-        else{
-          bot.sendMessage({
-            to: channelID,
-            message: "Error:\n" + error
-          })
-        }
+      printSiegeGeneralStats(siege_username,saveStats,function(msg){
+        bot.sendMessage({
+          to: channelID,
+          message: msg
+        })
       });
     }
   });
@@ -423,8 +335,8 @@ function getSeasonalStats(username,url,callback){
         region = j;
       }
       var data = result.seasons[season][region];
-      console.log('data',result.seasons[season][region]);
-      var msg = "**Season:**" + data.season + "\nWins: " + data.wins + "\nLosses: " + data.losses + "\nAbandons: " + data.abandons + "\nRegion: " + data.region +
+      //console.log('data',result.seasons[season][region]);
+      var msg = "Username: " + username +"\nOperator: N/A\n\n**Season:**" + data.season + "\nWins: " + data.wins + "\nLosses: " + data.losses + "\nAbandons: " + data.abandons + "\nRegion: " + data.region +
       "\nRating: " + Math.trunc(data.ranking.rating) + "\nNext Rating: " + data.ranking.next_rating + "\nPrev Rating: " + data.ranking.prev_rating + "\nRank: " + ranks[data.ranking.rank - 1];
       callback(msg);
     }
@@ -520,8 +432,10 @@ function onSeasonalEmojiReact(channelID, messageID){
   },function(err,res){
     var foundTower = false;
     for(var react in res.reactions ){
+      console.log(res.reactions[react])
       if(res.reactions[react].emoji.name == seasonal_emoji){
         foundTower = true;
+        //console.log('true');
       }
 
     }
@@ -537,18 +451,170 @@ function onSeasonalEmojiReact(channelID, messageID){
           messageID: messageID,
           message: msg
         });
-        bot.removeReaction({
+        /*bot.removeReaction({
           channelID: channelID,
           messageID: messageID,
           userID: bot.id,
           reaction: seasonal_emoji
-        })
+        })*/
       });
 
     }
 
 
   })
+}
+function onGeneralEmojiReact(channelID, messageID){
+  bot.getMessage({
+    channelID: channelID,
+    messageID: messageID
+  },function(err,res){
+    if(err){
+      console.log(err);
+    }
+    var foundEmoji = false;
+    for(var react in res.reactions ){
+      if(res.reactions[react].emoji.name == general_emoji){
+        foundEmoji = true;
+      }
+
+    }
+    var username = res.content.substring(res.content.indexOf('\nUsername: ') + 11, res.content.indexOf('\nLevel:'));
+    if(username.includes("Username: ")){
+      username = res.content.substring(res.content.indexOf('\nUsername: ') + 11, res.content.indexOf('\nOperator:'));
+    }
+    if(foundEmoji){
+      //console.log(username);
+      printSiegeGeneralStats(username,false,function(msg){
+        bot.editMessage({
+          channelID: channelID,
+          messageID: messageID,
+          message: msg
+        });
+      });
+    }
+
+
+  })
+}
+function addAllReactions(cid,mid){
+  var waitTime = 250;
+  bot.addReaction({
+    channelID: cid,
+    messageID: mid,
+    reaction: seasonal_emoji
+  },function(err,res){
+    if(err){
+      setTimeout(  function(){bot.addReaction({
+          channelID: cid,
+          messageID: mid,
+          reaction: seasonal_emoji
+        })}, err.response.retry_after);
+    }
+  });
+  bot.addReaction({
+      channelID: cid,
+      messageID: mid,
+      reaction: general_emoji
+  }, function(err,res){
+    if(err){
+      setTimeout(  function(){bot.addReaction({
+          channelID: cid,
+          messageID: mid,
+          reaction: general_emoji
+        })}, err.response.retry_after);
+    }
+  })
+
+}
+function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
+  var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
+  var msg = "";
+  var delta = "";
+  request(url, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      result = JSON.parse(body);
+      for(var obj in result.operator_records){
+
+        var api_operator = result.operator_records[obj].operator.name.toLowerCase();
+        //console.log(api_operator);
+        if(api_operator == 'jäger'){
+          api_operator = 'jaeger';
+        }
+        if(api_operator.includes('capit')){
+          api_operator = 'capitao';
+        }
+        if(api_operator == operator.toLowerCase()){
+          var specials = "";
+          for(var i in result.operator_records[obj].stats.specials){
+            specials += (i + ":");
+            specials += result.operator_records[obj].stats.specials[i];
+            specials += "\n";
+          }
+        //  console.log(specials);
+          msg = "Username: " + siege_username + "\nOperator: " + result.operator_records[obj].operator.name + "\n" + "Rounds Played: " + result.operator_records[obj].stats.played + "\n"
+          + "Wins: " + result.operator_records[obj].stats.wins + "\n" + "Losses: " + result.operator_records[obj].stats.losses + "\n" + "Win %: " + result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)  + "\nKills: " + result.operator_records[obj].stats.kills
+          + "\n" + "Deaths: " + result.operator_records[obj].stats.deaths + "\n\n" + "Specials:\n" + specials + "\n";
+          pg.getSiegeOperatorStats(siege_username,api_operator).then(function(pgresult){
+            if(pgresult.rows[0]){
+              delta = "Δ from " +pgresult.rows[0].last_updated + "\nΔ Rounds Played: " + (result.operator_records[obj].stats.played - pgresult.rows[0].rounds_played) + "\nΔ Wins: " + (result.operator_records[obj].stats.wins- pgresult.rows[0].wins) +
+              "\nΔ Losses: " + (result.operator_records[obj].stats.losses- pgresult.rows[0].losses) + "\nΔ Win %: " + ((result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses)) - pgresult.rows[0].win_percent) +
+              "\nΔ Kills: " + (result.operator_records[obj].stats.kills - pgresult.rows[0].kills) + "\nΔ Deaths: " + (result.operator_records[obj].stats.deaths - pgresult.rows[0].deaths);
+
+            }
+
+          })
+          if(saveStats){
+            console.log("Saving stats");
+            pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
+          }
+
+          break;
+        }
+      }
+      callback(msg+delta);
+
+    }
+  });
+
+}
+function printSiegeGeneralStats(siege_username,saveStats,callback){
+  var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '?platform=uplay'
+  request(url, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      result = JSON.parse(body);
+      var delta = "";
+      var playerStats =  "**General Stats**\nUsername: " + result.player.username +"\nLevel: "+ result.player.stats.progression.level + "\nLast Updated: " + result.player.updated_at + "\n\n"
+      + "**Ranked Stats**: \n" + "Wins: " + result.player.stats.ranked.wins + "\n" + "Losses: " + result.player.stats.ranked.losses + "\n"
+      + "Win Rate: " + result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) + "\n"
+      + "Kills: " + result.player.stats.ranked.kills + "\n" + "Deaths: " + result.player.stats.ranked.deaths + "\n" + "K/D: " + result.player.stats.ranked.kd + "\n"
+      + "\n" + "**Casual Stats**:\n" + "Wins: " + result.player.stats.casual.wins + "\nLosses: " + result.player.stats.casual.losses + "\n" + "Win Rate: " + result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)+
+      "\n" + "Kills: " + result.player.stats.casual.kills + "\n" + "Deaths: " + result.player.stats.casual.deaths + "\n" + "K/D: " + result.player.stats.casual.kd + "\n\n" + "**Meme Stats**: \n" + "Revives: " + result.player.stats.overall.revives + "\nSuicides: " +
+      result.player.stats.overall.suicides + "\nReinforcements Deployed: " + result.player.stats.overall.reinforcements_deployed + "\nBarricades Built: " + result.player.stats.overall.barricades_built + "\nSteps Moved: " + result.player.stats.overall.steps_moved + "\nHit Percentage: "
+      + (result.player.stats.overall.bullets_hit/(result.player.stats.overall.bullets_fired + result.player.stats.overall.bullets_hit)) + "\nHeadshots: " + result.player.stats.overall.headshots + "\nMelee Kills: " + result.player.stats.overall.melee_kills + "\nPenetration Kills: " + result.player.stats.overall.penetration_kills + "\n"
+      + "Assists: " + result.player.stats.overall.assists + "\n"
+      + url + "\n";
+
+      pg.getSiegeGeneralStats(siege_username).then(function(pgresult){
+        if(pgresult.rows[0]){
+          delta = "Δ from " +pgresult.rows[0].last_updated  + "\n\nΔ Ranked Wins: " + (result.player.stats.ranked.wins - pgresult.rows[0].ranked_wins) + "\nΔ Ranked Losses: " + (result.player.stats.ranked.losses - pgresult.rows[0].ranked_losses) + "\nΔ Ranked Winrate: " + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses) -  pgresult.rows[0].ranked_wr) +
+          "\nΔ Ranked Kills: " + (result.player.stats.ranked.kills - pgresult.rows[0].ranked_kills) + "\nΔ Ranked Deaths: " + (result.player.stats.ranked.deaths - pgresult.rows[0].ranked_deaths) +
+          "\nΔ Ranked K/D: " + (result.player.stats.ranked.kd - pgresult.rows[0].ranked_kd) + "\n\nΔ Casual Wins: " + (result.player.stats.casual.wins - pgresult.rows[0].casual_wins) +"\nΔ Casual Losses: " + (result.player.stats.casual.losses - pgresult.rows[0].casual_losses) + "\nΔ Casual Winrate: " + (result.player.stats.casual.wins / (result.player.stats.casual.wins + result.player.stats.casual.losses) -  pgresult.rows[0].casual_wr) +
+          "\nΔ Casual Kills: " + (result.player.stats.casual.kills - pgresult.rows[0].casual_kills) + "\nΔ Casual Deaths: " + (result.player.stats.casual.deaths - pgresult.rows[0].casual_deaths) +
+          "\nΔ Casual K/D: " + (result.player.stats.casual.kd - pgresult.rows[0].casual_kd);
+          console.log(delta);
+        }
+        callback( playerStats + delta);
+      });
+
+
+      if(saveStats){
+        console.log('Saving general stats');
+        pg.saveSiegeGeneralStats(siege_username,new Date(),result.player.stats.ranked.wins,result.player.stats.ranked.losses, "" + (result.player.stats.ranked.wins / (result.player.stats.ranked.wins + result.player.stats.ranked.losses)),result.player.stats.ranked.kills,result.player.stats.ranked.deaths,result.player.stats.ranked.kd, result.player.stats.casual.wins, result.player.stats.casual.losses, "" + (result.player.stats.casual.wins/(result.player.stats.casual.wins + result.player.stats.casual.losses)),result.player.stats.casual.kills,result.player.stats.casual.deaths, result.player.stats.casual.kd);
+      }
+
+    }
+  });
 
 }
 var server = require('http').createServer(app);
