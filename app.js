@@ -9,6 +9,7 @@ var fs = require('fs');
 var Discord = require('discord.io');
 var yt_playlist = require('./ytplaylist');
 var pg = require('./postgres')
+
 app = express();
 
 function Queue()
@@ -35,6 +36,7 @@ function Queue()
     const DEFAULT_AUDIO_VOLUME = 0.25;
     var seasonal_emoji = "🗼";
     var general_emoji = "🇬";
+    var emojis = [seasonal_emoji, general_emoji,"capitao:407005742902673409"]
     var ranks = ['Copper IV','Copper III','Copper II','Copper I','Bronze IV','Bronze III','Bronze II','Bronze I','Silver IV','Silver III','Silver II','Silver I','Gold IV','Gold III','Gold II','Gold I','Plat IV','Plat III','Plat II','Plat I','Diamond']
 
     bot.on('ready', function(event) {
@@ -63,6 +65,43 @@ function Queue()
           console.log('general');
           onGeneralEmojiReact(cid, mid);
         }
+        else{
+          console.log('other');
+          //Try to parse the operator name.
+          var operator = event.d.emoji.name;
+          var saveStats = false;
+          bot.getMessage({
+            channelID: cid,
+            messageID: mid
+          },function(err,res){
+          //  console.log('res',res);
+            var username = res.content.substring(res.content.indexOf('\nUsername: ') + 11, res.content.indexOf('\nLevel:'));
+            if(username.includes("Username: ")){
+              username = res.content.substring(res.content.indexOf('\nUsername: ') + 11, res.content.indexOf('\nOperator:'));
+            }
+            pg.getUplayUsername(event.d.user_id).then(function(result){
+                if(result.rows[0]){
+                  if(result.rows[0].uplay_username.toLowerCase() == username.toLowerCase()){
+                    saveStats = true;
+                    console.log("saving stats");
+                  }
+                }
+                else{
+                  saveStats = false;
+                }
+                printSiegeOperatorStats(operator,username,saveStats,function(msg){
+                  bot.editMessage({
+                    channelID: cid,
+                    messageID: mid,
+                    message: msg
+                  });
+                })
+            });
+          });
+
+
+
+        }
 
       }
 
@@ -73,7 +112,7 @@ function Queue()
       //Add a react to general stats
       if(event.d.author.id == bot.id && event.d.content.includes('Username: ')){
         //console.log('react',event.d.id);
-        addAllReactions(event.d.channel_id,event.d.id);
+        addAllReactions(event.d.channel_id,event.d.id,0);
       }
         /*for(var m in event.d.mentions){
           if(event.d.mentions[m].id == bot.id){
@@ -497,34 +536,25 @@ function onGeneralEmojiReact(channelID, messageID){
 
   })
 }
-function addAllReactions(cid,mid){
-  var waitTime = 250;
-  bot.addReaction({
-    channelID: cid,
-    messageID: mid,
-    reaction: seasonal_emoji
-  },function(err,res){
-    if(err){
-      setTimeout(  function(){bot.addReaction({
-          channelID: cid,
-          messageID: mid,
-          reaction: seasonal_emoji
-        })}, err.response.retry_after);
+function addAllReactions(cid,mid, index){
+    if(index >= emojis.length){
+      return -1;
     }
-  });
-  bot.addReaction({
-      channelID: cid,
-      messageID: mid,
-      reaction: general_emoji
-  }, function(err,res){
-    if(err){
-      setTimeout(  function(){bot.addReaction({
-          channelID: cid,
-          messageID: mid,
-          reaction: general_emoji
-        })}, err.response.retry_after);
-    }
-  })
+    bot.addReaction({
+        channelID: cid,
+        messageID: mid,
+        reaction: emojis[index]//{name: 'capitao', id: 407005742902673409, animated: false}
+    }, function(err,res){
+      if(err){
+        //console.log(err);
+        setTimeout(function(){
+          addAllReactions(cid,mid,index);
+        },err.response.retry_after + 100)
+      }
+      else{
+          addAllReactions(cid,mid,index + 1);
+      }
+    })
 
 }
 function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
@@ -541,11 +571,14 @@ function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
         if(api_operator == 'jäger'){
           api_operator = 'jaeger';
         }
-        if(api_operator.includes('capit')){
+        if(api_operator.includes('capitão')){
           api_operator = 'capitao';
         }
+        //console.log(operator);
+        //console.log(result.operator_records[obj].operator.name);
         if(api_operator == operator.toLowerCase()){
           var specials = "";
+
           for(var i in result.operator_records[obj].stats.specials){
             specials += (i + ":");
             specials += result.operator_records[obj].stats.specials[i];
@@ -562,7 +595,7 @@ function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
               "\nΔ Kills: " + (result.operator_records[obj].stats.kills - pgresult.rows[0].kills) + "\nΔ Deaths: " + (result.operator_records[obj].stats.deaths - pgresult.rows[0].deaths);
 
             }
-
+            callback(msg+delta);
           })
           if(saveStats){
             console.log("Saving stats");
@@ -572,7 +605,8 @@ function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
           break;
         }
       }
-      callback(msg+delta);
+      callback("Username: " + siege_username + "\nOperator: " + operator + "\n__**NOT FOUND**__");
+
 
     }
   });
