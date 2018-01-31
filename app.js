@@ -36,7 +36,17 @@ function Queue()
     const DEFAULT_AUDIO_VOLUME = 0.25;
     var seasonal_emoji = "🗼";
     var general_emoji = "🇬";
-    var emojis = [seasonal_emoji, general_emoji,"capitao:407005742902673409"]
+    var question_emoji = "❓";
+    var back_emoji = "🔙";
+    var US_emoji = "🇺🇸"
+    var CAN_emoji = "🇨🇦";
+    var JP_emoji = "🇯🇵";
+    var SP_emoji = "🇪🇸";
+    var HK_emoji = "🇭🇰";
+    var BRA_emoji = "🇧🇷";
+    var PO_emoji = "🇵🇱";
+    var KO_emoji = "🇰🇷";
+    var emojis = [seasonal_emoji, general_emoji,question_emoji,back_emoji,US_emoji,CAN_emoji,JP_emoji,SP_emoji,HK_emoji,BRA_emoji,PO_emoji,KO_emoji];
     var ranks = ['Copper IV','Copper III','Copper II','Copper I','Bronze IV','Bronze III','Bronze II','Bronze I','Silver IV','Silver III','Silver II','Silver I','Gold IV','Gold III','Gold II','Gold I','Plat IV','Plat III','Plat II','Plat I','Diamond']
 
     bot.on('ready', function(event) {
@@ -64,6 +74,73 @@ function Queue()
         else if(event.d.emoji.name == general_emoji){
           console.log('general');
           onGeneralEmojiReact(cid, mid);
+        }
+        else if(event.d.emoji.name == back_emoji){
+          removeAllReactions(cid,mid,function(){
+            addAllReactions(cid,mid,0);
+          });
+        }
+        else if(event.d.emoji.name == "sas"){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["thatcher","mute","smoke","sledge"])
+          });
+        }
+        else if(event.d.emoji.name == "gsg9"){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["iq","blitz","jaeger","bandit"])
+          });
+        }
+        else if(event.d.emoji.name == "spetsnaz"){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["fuze","glaz","kapkan","tachanka"])
+          });
+        }
+        else if(event.d.emoji.name == US_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["valkyrie","blackbeard","pulse","castle","ash","thermite"]);
+          });
+        }
+        else if(event.d.emoji.name == CAN_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["frost","buck"])
+          });
+        }
+        else if(event.d.emoji.name == JP_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["hibana","echo"])
+          });
+        }
+        else if(event.d.emoji.name == BRA_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["capitao","caveira"])
+          });
+        }
+        else if(event.d.emoji.name == SP_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["jackal","mira"])
+          });
+        }
+        else if(event.d.emoji.name == HK_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["ying","lesion"])
+          });
+        }
+        else if(event.d.emoji.name == PO_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["zofia","ela"])
+          });
+        }
+        else if(event.d.emoji.name == KO_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["dokkaebi","vigil"])
+          });
+        }
+        else if(event.d.emoji.name == question_emoji){
+          console.log('help');
+          bot.sendMessage({
+            to: cid,
+            message: "Commands are: siege (-u UPLAY_USERNAME)(-o OPERATOR_NAME)\n" + "play YOUTUBE_URL (volume 0-1)\n" + "skip\n" + "stop\n" + "set uplay UPLAY_USERNAME\n" + "Parameters in parantheses are optional- do not type the parantheses."
+          })
         }
         else{
           console.log('other');
@@ -536,17 +613,105 @@ function onGeneralEmojiReact(channelID, messageID){
 
   })
 }
+function removeAllReactions(cid,mid,callback){
+    var allEmojis = [];
+    bot.getMessage({
+      channelID: cid,
+      messageID: mid
+    },function(err,res){
+      for(var react in res.reactions ){
+        //console.log(res.reactions[react])
+        if(res.reactions[react].me){
+          var tbd = res.reactions[react].emoji.name;
+          if(res.reactions[react].emoji.id){
+            tbd = tbd+  ":" + res.reactions[react].emoji.id;
+          }
+          allEmojis.push(tbd);
+        }
+      }
+      //console.log(allEmojis.length);
+      if(allEmojis.length == 0){
+        setTimeout(function(){
+          callback();
+        },200);
+
+      } else{
+        bot.removeReaction({
+            channelID: cid,
+            messageID: mid,
+            reaction: allEmojis[0]
+        }, function(err,res){
+          if(err){
+            console.log(err);
+            setTimeout(function(){
+              removeAllReactions(cid,mid,callback);
+            },err.response.retry_after + 100)
+          }
+          else{
+              removeAllReactions(cid,mid,callback);
+          }
+        })
+      }
+    });
+}
+function addOpReactions(cid,mid, index,op_array){
+      var allEmojis = [];
+      //allEmojis.push.apply(allEmojis, emojis);
+      for(var i in bot.servers[bot.channels[cid].guild_id].emojis){
+
+        var em = bot.servers[bot.channels[cid].guild_id].emojis[i];
+        //console.log(em.name.toLowerCase());
+        if(op_array.includes(em.name)){
+          //console.log(em.name.toLowerCase());
+          allEmojis.push(bot.servers[bot.channels[cid].guild_id].emojis[i].name + ":" + bot.servers[bot.channels[cid].guild_id].emojis[i].id)
+        }
+
+      }
+      allEmojis.push(back_emoji);
+
+      if(index >= allEmojis.length){
+        return -1;
+      }
+      bot.addReaction({
+          channelID: cid,
+          messageID: mid,
+          reaction: allEmojis[index]//{name: 'capitao', id: 407005742902673409, animated: false}
+      }, function(err,res){
+        if(err){
+        //  console.log(err);
+          setTimeout(function(){
+            addOpReactions(cid,mid,index,op_array);
+          },err.response.retry_after + 100)
+        }
+        else{
+            addOpReactions(cid,mid,index + 1,op_array);
+        }
+      })
+
+}
 function addAllReactions(cid,mid, index){
-    if(index >= emojis.length){
+
+    var allEmojis = [];
+    allEmojis.push.apply(allEmojis, emojis);
+    for(var i in bot.servers[bot.channels[cid].guild_id].emojis){
+      //console.log(bot.servers[bot.channels[cid].guild_id].emojis[i]);
+      if(bot.servers[bot.channels[cid].guild_id].emojis[i].name == "sas" || bot.servers[bot.channels[cid].guild_id].emojis[i].name == "gsg9" || bot.servers[bot.channels[cid].guild_id].emojis[i].name == "spetsnaz"){
+        allEmojis.push(bot.servers[bot.channels[cid].guild_id].emojis[i].name + ":" + bot.servers[bot.channels[cid].guild_id].emojis[i].id)
+      }
+
+    }
+    //allEmojis.push.apply(allEmojis, bot.servers[bot.channels[cid].guild_id].emojis);
+
+    if(index >= (emojis.length + 3)){
       return -1;
     }
     bot.addReaction({
         channelID: cid,
         messageID: mid,
-        reaction: emojis[index]//{name: 'capitao', id: 407005742902673409, animated: false}
+        reaction: allEmojis[index]//{name: 'capitao', id: 407005742902673409, animated: false}
     }, function(err,res){
       if(err){
-        //console.log(err);
+      //  console.log(err);
         setTimeout(function(){
           addAllReactions(cid,mid,index);
         },err.response.retry_after + 100)
@@ -561,6 +726,7 @@ function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
   var url = 'https://api.r6stats.com/api/v1/players/' + siege_username + '/operators?platform=uplay'
   var msg = "";
   var delta = "";
+  var located = false;
   request(url, function (error, response, body) {
     if (!error && response.statusCode == 200) {
       result = JSON.parse(body);
@@ -601,13 +767,13 @@ function printSiegeOperatorStats(operator,siege_username,saveStats,callback){
             console.log("Saving stats");
             pg.saveSiegeOperatorStats(siege_username,new Date(),api_operator,result.operator_records[obj].stats.played,result.operator_records[obj].stats.wins,result.operator_records[obj].stats.losses,result.operator_records[obj].stats.wins/ (result.operator_records[obj].stats.wins + result.operator_records[obj].stats.losses),result.operator_records[obj].stats.kills,result.operator_records[obj].stats.deaths);
           }
-
+          located = true;
           break;
         }
       }
-      callback("Username: " + siege_username + "\nOperator: " + operator + "\n__**NOT FOUND**__");
-
-
+      if(!located){
+        callback("Username: " + siege_username + "\nOperator: " + operator + "\n__**NOT FOUND**__");
+      }
     }
   });
 
