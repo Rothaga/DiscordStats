@@ -46,7 +46,8 @@ function Queue()
     var BRA_emoji = "🇧🇷";
     var PO_emoji = "🇵🇱";
     var KO_emoji = "🇰🇷";
-    var emojis = [seasonal_emoji, general_emoji,question_emoji,back_emoji,US_emoji,CAN_emoji,JP_emoji,SP_emoji,HK_emoji,BRA_emoji,PO_emoji,KO_emoji];
+    var FR_emoji = "🇫🇷";
+    var emojis = [seasonal_emoji, general_emoji,question_emoji,back_emoji,US_emoji,CAN_emoji,JP_emoji,SP_emoji,HK_emoji,BRA_emoji,PO_emoji,KO_emoji,FR_emoji];
     var ranks = ['Copper IV','Copper III','Copper II','Copper I','Bronze IV','Bronze III','Bronze II','Bronze I','Silver IV','Silver III','Silver II','Silver I','Gold IV','Gold III','Gold II','Gold I','Plat IV','Plat III','Plat II','Plat I','Diamond']
 
     bot.on('ready', function(event) {
@@ -92,12 +93,17 @@ function Queue()
         }
         else if(event.d.emoji.name == "spetsnaz"){
           removeAllReactions(cid,mid,function(){
-            addOpReactions(cid,mid,0,["fuze","glaz","kapkan","tachanka"])
+            addOpReactions(cid,mid,0,["fuze","glaz","kapkan","tachanka","finka"])
           });
         }
         else if(event.d.emoji.name == US_emoji){
           removeAllReactions(cid,mid,function(){
             addOpReactions(cid,mid,0,["valkyrie","blackbeard","pulse","castle","ash","thermite"]);
+          });
+        }
+        else if(event.d.emoji.name == FR_emoji){
+          removeAllReactions(cid,mid,function(){
+            addOpReactions(cid,mid,0,["twitch","rook","doc","montagne","lion"])
           });
         }
         else if(event.d.emoji.name == CAN_emoji){
