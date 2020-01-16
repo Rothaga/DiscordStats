@@ -1,4 +1,4 @@
-settings.js
+./settings.js
 node_modules/
 .classpath
 .project
