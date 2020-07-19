@@ -17,7 +17,7 @@
     "passport": "^0.3.2",
     "passport-local": "^1.0.0",
     "request": "^2.88.0",
-    "sequelize": "^4.44.3",
+    "sequelize": "^5.15.1",
     "serve-favicon": "^2.5.0",
     "socket.io": "^2.3.0",
     "youtube-audio-stream": "0.0.50"
