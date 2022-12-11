@@ -9,7 +9,7 @@
     "cookie-parser": "^1.4.4",
     "discord.io": "github:woor/discord.io#gateway_v6",
     "ejs": "^2.7.4",
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "express-session": "^1.17.0",
     "forever": "^2.0.0",
     "fs": "0.0.1-security",
